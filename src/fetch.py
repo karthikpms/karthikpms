@@ -15,6 +15,7 @@ import datetime as dt
 import json
 import os
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -67,9 +68,13 @@ if __name__ == "__main__":
     login, out = sys.argv[1], sys.argv[2]
     previous = json.load(open(out)) if os.path.exists(out) else {}
     stats = {"days": calendar(login, os.environ["GITHUB_TOKEN"])}
-    if os.environ.get("PROFILE_TOKEN"):
+    try:
+        if not os.environ.get("PROFILE_TOKEN"):
+            raise LookupError("PROFILE_TOKEN not set")
         stats.update(commit_aggregates(login, os.environ["PROFILE_TOKEN"]))
-    else:
+    except (LookupError, urllib.error.HTTPError) as err:
+        # expired or missing token: keep the last good commit aggregates rather than fail
+        print(f"::warning::keeping previous commit stats ({err})")
         stats.update({k: previous[k] for k in ("hours", "kinds", "n_commits")})
     stats["generated"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="minutes")
     with open(out, "w") as f:
